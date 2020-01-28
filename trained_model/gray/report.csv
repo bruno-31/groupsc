@@ -1,0 +1,5 @@
+corr_update%3_,freq%6_,kernel_size%9_,lr_step%80_,noise_level%25_,train_batch%25_,29.3379,29.1922
+corr_update%3_,freq%6_,kernel_size%9_,lr_step%80_,noise_level%5_,train_batch%25_,37.9060,37.9537
+corr_update%3_,freq%6_,lr_step%80_,multi_std%1_,noise_level%25_,train_batch%25_,29.3081,29.1890
+corr_update%3_,freq%6_,kernel_size%9_,lr_step%80_,noise_level%50_,train_batch%25_,26.2022,26.1659
+corr_update%3_,freq%6_,kernel_size%9_,lr_step%80_,noise_level%15_,train_batch%25_,31.8216,31.6985
