@@ -48,19 +48,22 @@ class Lista(nn.Module):
             self.lmbda = nn.Parameter(torch.zeros(1, params.num_filters, 1, 1))
             nn.init.constant_(self.lmbda, params.threshold)
 
-        self.soft_threshold = soft_threshold
+        self.soft_threshold = fastSoftThrs
 
-    def forward(self, I, writer=None, epoch=None, return_patches=False):
+    def forward(self, I, mask):
 
         params = self.params
         thresh_fn = self.soft_threshold
 
         I_size = I.shape
         I_col = Im2Col(I, kernel_size=params.kernel_size, stride=params.stride, padding=0, tensorized=True)
+        I_mask = Im2Col(mask, kernel_size=params.kernel_size, stride=params.stride, padding=0, tensorized=True)
 
         mean_patch = I_col.mean(dim=1, keepdim=True)
         I_col = I_col - mean_patch
-        lin_input = self.apply_A(I_col)
+        #lin_input = self.apply_A(I_col)
+        lin_input = self.apply_A(I_mask *I_col)
+
         lmbda_ = self.lmbda[0] if params.multi_lmbda else self.lmbda
         gamma_k = thresh_fn(lin_input, lmbda_)
 
@@ -68,7 +71,8 @@ class Lista(nn.Module):
 
         for k in range(params.unfoldings - 1):
             x_k = self.apply_D(gamma_k)
-            res = x_k - I_col
+            res = (x_k - I_col)*I_mask
+            # res = x_k - I_col
             r_k = self.apply_A(res)
             lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda
             gamma_k = thresh_fn(gamma_k - r_k, lmbda_)
@@ -79,6 +83,3 @@ class Lista(nn.Module):
                         avg=True, input_tensorized=True)
 
         return output
-
-
-

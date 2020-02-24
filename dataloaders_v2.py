@@ -7,6 +7,13 @@ import torchvision.transforms.functional as TF
 import random
 from typing import Sequence
 
+from itertools import repeat
+
+def repeater(data_loader):
+    for loader in repeat(data_loader):
+        for data in loader:
+            yield data
+
 class MyRotateTransform:
     def __init__(self, angles: Sequence[int]):
         self.angles = angles
@@ -82,7 +89,45 @@ class ColorDenoisingDataset(Dataset):
         return image
 
 
-def get_dataloaders(train_path_list, test_path_list, crop_size=128, batch_size=1,downscale=0,drop_last=True,concat=True):
+def get_color_dataloaders(train_path_list, test_path_list,val_path_list, crop_size=128, batch_size=1,downscale=0,
+                          drop_last=True,concat=True, n_worker=0,scale_min=0.001,scale_max=0.1):
+
+    batch_sizes = {'train': batch_size, 'test':1, 'val': 1}
+    tfs = []
+    if downscale==0:
+        tfs = [transforms.RandomCrop(crop_size)]
+    elif downscale==1:
+        tfs += [transforms.RandomResizedCrop(crop_size, scale=(scale_min,scale_max), ratio=(1.0,1.0))]
+    elif downscale==2:
+        print('mode 2')
+        tfs += [transforms.Resize(300)]
+        tfs += [transforms.RandomCrop(crop_size)]
+        #TODO interpolation = Image.BILINEAR
+
+    tfs += [transforms.RandomCrop(crop_size),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomVerticalFlip(),
+    transforms.ToTensor()]
+
+    train_transforms = transforms.Compose(tfs)
+    test_transforms = transforms.Compose([transforms.ToTensor()])
+
+    data_transforms = {'train': train_transforms, 'test': test_transforms, 'val': test_transforms}
+
+    if concat:
+        train = torch.utils.data.ConcatDataset(
+            [ColorDenoisingDataset(train_path_list, data_transforms['train']) for _ in range(batch_sizes['train'])])
+    else:
+        train = ColorDenoisingDataset(train_path_list, data_transforms['train'])
+
+    image_datasets = {'train': train, # constant num of iter per epoch not depending on batch size
+                      'test': ColorDenoisingDataset(test_path_list, data_transforms['test']),
+                      'val':ColorDenoisingDataset(val_path_list, data_transforms['test'])}
+
+    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x], num_workers=n_worker,drop_last=drop_last, shuffle=(x == 'train')) for x in ['train', 'test', 'val']}
+    return dataloaders
+
+def get_dataloaders(train_path_list, test_path_list, val_path_list , crop_size=128, batch_size=1,downscale=0,drop_last=True,concat=True):
     batch_sizes = {'train': batch_size, 'test':1}
     tfs = []
     if downscale==0:
@@ -101,50 +146,17 @@ def get_dataloaders(train_path_list, test_path_list, crop_size=128, batch_size=1
     test_transforms = transforms.Compose([
         transforms.ToTensor()])
 
-    data_transforms = {'train': train_transforms,
-                       'test': test_transforms}
+    data_transforms = {'train': train_transforms, 'test': test_transforms, 'val': test_transforms}
 
     if concat:
-        image_datasets = {'train': torch.utils.data.ConcatDataset([DenoisingDataset(train_path_list, data_transforms['train']) for _ in range(batch_sizes['train'])]), # constant num of iter per epoch not depending on batch size
-                          'test': DenoisingDataset(test_path_list, data_transforms['test'])}
+        train = torch.utils.data.ConcatDataset(
+            [ColorDenoisingDataset(train_path_list, data_transforms['train']) for _ in range(batch_sizes['train'])])
     else:
-        image_datasets = {'train': DenoisingDataset(train_path_list, data_transforms['train']),
-                          'test': DenoisingDataset(test_path_list, data_transforms['test'])}
+        train = ColorDenoisingDataset(train_path_list, data_transforms['train'])
+
+    image_datasets = {'train': train, # constant num of iter per epoch not depending on batch size
+                      'test': DenoisingDataset(test_path_list, data_transforms['test']),
+                      'val':DenoisingDataset(val_path_list, data_transforms['test'])}
 
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x], drop_last=drop_last, shuffle=(x == 'train')) for x in ['train', 'test']}
     return dataloaders
-
-
-def get_color_dataloaders(train_path_list, test_path_list, crop_size=128, batch_size=1,downscale=0,drop_last=True,concat=True):
-
-    batch_sizes = {'train': batch_size, 'test':1}
-    tfs = []
-    if downscale==0:
-        tfs = [transforms.RandomCrop(crop_size)]
-    elif downscale==1:
-        tfs += [transforms.RandomResizedCrop(crop_size,(2.0,2.01))]
-    elif downscale==2:
-        tfs += [transforms.RandomResizedCrop(crop_size,(1.0,2.01))]
-
-    tfs += [transforms.RandomCrop(crop_size),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-    transforms.ToTensor()]
-
-    train_transforms = transforms.Compose(tfs)
-    test_transforms = transforms.Compose([
-        transforms.ToTensor()])
-
-    data_transforms = {'train': train_transforms,
-                       'test': test_transforms}
-
-    if concat:
-        image_datasets = {'train': torch.utils.data.ConcatDataset([ColorDenoisingDataset(train_path_list, data_transforms['train']) for _ in range(batch_sizes['train'])]), # constant num of iter per epoch not depending on batch size
-                          'test': ColorDenoisingDataset(test_path_list, data_transforms['test'])}
-    else:
-        image_datasets = {'train': ColorDenoisingDataset(train_path_list, data_transforms['train']),
-                          'test': ColorDenoisingDataset(test_path_list, data_transforms['test'])}
-
-    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x], drop_last=drop_last, shuffle=(x == 'train')) for x in ['train', 'test']}
-    return dataloaders
-

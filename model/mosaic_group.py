@@ -4,7 +4,7 @@ from collections import namedtuple
 from ops_nonlocal.matching import SoftMatchingLayer
 from ops.im2col import Im2Col, Col2Im
 import torch.nn.functional as F
-from ops.utils import gen_mask_windows, gen_quadra_mask_windows
+from ops.utils import gen_mask_windows, gen_quadra_mask_windows, togray
 
 ListaParams = namedtuple('ListaParams', ['kernel_size', 'num_filters', 'stride', 'unfoldings',
                                          'freq', 'corr_update', 'lmbda_init', 'h', 'spams',
@@ -16,8 +16,8 @@ NUM_CHANNEL = 3
 def group_prox(A, theta, mask_sim):
     '''
     :param theta: (1,p,1,1)
-    :param A: (b,p,h,w)
-    :param mask_sim:(b,1,N_patch,N_patch)
+    :param A: (b,p,N_patch)
+    :param mask_sim:(b,1,N_group,N_patch)
     :return: prox(A)
     '''
     A_shape = A.shape
@@ -27,7 +27,6 @@ def group_prox(A, theta, mask_sim):
     A = A.unsqueeze(2)
     out = F.relu(1-theta * support_sim / (norm_2_group))*A
     return out.view(A_shape)
-
 
 def norm_group(A,mask_sim, theta):
     '''
@@ -135,11 +134,14 @@ class groupLista(nn.Module):
             [module.set_mask(mask_window_blocks) for module in self.simLayer]
 
 
-    def forward(self, I, I_clean=None, writer=None, epoch=None):
+    def forward(self, I, mask):
+
         params = self.params
         thresh_fn = self.threshold
         I_size = I.shape
         I_col = Im2Col(I,kernel_size=params.kernel_size,stride=params.stride,padding=0,tensorized=True)
+        I_mask = Im2Col(mask, kernel_size=params.kernel_size, stride=params.stride, padding=0, tensorized=True)
+
         N = I_col.shape[2] * I_col.shape[3]
         b,n,h,w = I_col.shape
 
@@ -149,8 +151,9 @@ class groupLista(nn.Module):
 
         col = I_col * self.std[counter_lista]
 
-        similarity_map = self.simLayer[counter_lista](col).flatten(2,3).view(b,1,N,N)
-
+        similarity_map = self.simLayer[counter_lista](togray(col)).flatten(2,3).view(b,1,N,N)
+        #similarity_map = self.simLayer[counter_lista](col).flatten(2,3).view(b,1,N,N)
+        lin= self.apply_A(I_mask *I_col)
         lin = self.apply_A(I_col)
 
         lmbda_ = self.lmbda[0] if params.multi_lmbda else self.lmbda
@@ -163,8 +166,6 @@ class groupLista(nn.Module):
                 if params.multi_std:
                     counter_lista += 1
 
-                # gamma_k_corr_update = (gamma_k * self.std_g) if (params.std_gamma) else gamma_k
-                # gamma_k_corr_update =  gamma_k
                 gamma_k_corr_update = (gamma_k * self.std_g[counter_lista-1]) if (params.std_gamma) else gamma_k
 
                 if params.corr_update == 2:
@@ -184,7 +185,8 @@ class groupLista(nn.Module):
                 similarity_map = (1-nu_sigmoid) * similarity_map + (nu_sigmoid) * similarity_map_new
 
             x_k = self.apply_D(gamma_k)
-            res = I_col - x_k
+            res = (I_col - x_k)*I_mask
+            #res = I_col - x_k
             r_k = self.apply_A(res)
 
             lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda

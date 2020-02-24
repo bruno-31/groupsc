@@ -5,6 +5,24 @@ import argparse
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
+
+
+def gen_bayer_mask(h,w):
+    x = torch.zeros(1, 3, h, w)
+
+    x[:, 0, 1::2, 1::2] = 1  # r
+    x[:, 1, ::2, 1::2] = 1
+    x[:, 1, 1::2, ::2] = 1  # g
+    x[:, 2, ::2, ::2] = 1  # b
+
+    return x
+
+def togray(tensor):
+    b, c, h, w = tensor.shape
+    tensor = tensor.view(b, 3, -1, h, w)
+    tensor = tensor.sum(1)
+    return tensor
 
 def torch_to_np(img_var):
     return img_var.detach().cpu().numpy()
@@ -37,6 +55,9 @@ def sparsity(A):
 
 def soft_threshold(x, lambd):
     return nn.functional.relu(x - lambd) - nn.functional.relu(-x - lambd)
+
+def fastSoftThrs(x, lmbda):
+    return x + 0.5 * (torch.abs(x-torch.abs(lmbda))-torch.abs(x+torch.abs(lmbda)))
 
 def save_checkpoint(state,ckpt_path):
     torch.save(state, ckpt_path)
@@ -119,3 +140,33 @@ def gen_quadra_mask_windows(h, w, h_,w_):
             mask[i:i + h, j:j + w, i, j] = kernel
 
     return mask[h // 2:-h // 2, w // 2:-w // 2, :, :]
+
+def pil_to_np(img_PIL):
+    '''Converts image in PIL format to np.array.
+
+    From W x H x C [0...255] to C x W x H [0..1]
+    '''
+    ar = np.array(img_PIL)
+
+    if len(ar.shape) == 3:
+        ar = ar.transpose(2, 0, 1)
+    else:
+        ar = ar[None, ...]
+
+    return ar.astype(np.float32) / 255.
+
+
+def np_to_pil(img_np):
+    '''Converts image in np.array format to PIL image.
+
+    From C x W x H [0..1] to  W x H x C [0...255]
+    '''
+    ar = np.clip(img_np * 255, 0, 255).astype(np.uint8)
+
+    if img_np.shape[0] == 1:
+        ar = ar[0]
+    else:
+        ar = ar.transpose(1, 2, 0)
+
+    return Image.fromarray(ar)
+

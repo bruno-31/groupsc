@@ -1,4 +1,4 @@
-import dataloaders
+import dataloaders_v2
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import time
 from ops.utils_blocks import block_module
 from ops.utils import show_mem, generate_key, save_checkpoint, str2bool, step_lr, get_lr
+torch.Tensor.__str__ = lambda x: str(tuple(x.shape))
 
 parser = argparse.ArgumentParser()
 #model
@@ -53,8 +54,8 @@ parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
 
 #inference
-parser.add_argument("--stride_test", type=int, default=12, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
-parser.add_argument("--stride_val", type=int, default=48, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_test", type=int, default=50, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_val", type=int, default=50, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
 parser.add_argument("--pad_image", type=str2bool, default=0,help='padding strategy for inference')
@@ -75,15 +76,30 @@ val_path = train_path
 
 noise_std = args.noise_level / 255
 
-loaders = dataloaders.get_color_dataloaders(train_path, test_path, crop_size=args.patch_size,
+# loaders = dataloaders.get_color_dataloaders(train_path, test_path, crop_size=args.patch_size,
+#                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+# loaders_validation = dataloaders.get_color_dataloaders(val_path, val_path, crop_size=args.patch_size,
+#                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+
+loaders = dataloaders_v2.get_color_dataloaders(train_path, test_path,val_path, crop_size=args.patch_size,
                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
-loaders_validation = dataloaders.get_color_dataloaders(val_path, val_path, crop_size=args.patch_size,
-                                      batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+
 
 if args.mode == 'group':
     print('group mode')
     from model.color_group import ListaParams
     from model.color_group import groupLista as Lista
+
+    params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
+                         unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,
+                         lmbda_init=args.lmbda_prox, h=args.rescaling_init_val,spams=args.spams_init,multi_lmbda=args.multi_theta,
+                         center_windows=args.center_windows,std_gamma=args.diag_rescale_gamma,
+                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows, multi_std=args.multi_std)
+
+elif args.mode == 'rwl1':
+    print('group mode')
+    from model.group_rwl1 import ListaParams
+    from model.group_rwl1 import groupLista as Lista
 
     params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
                          unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,
@@ -191,7 +207,8 @@ while epoch < args.num_epochs:
         num_iters = 0
         psnr_set = 0
 
-        loader = loaders['test'] if phase == 'val' else loaders[phase]
+        # loader = loaders['test'] if phase == 'val' else loaders[phase]
+        loader = loaders[phase]
 
         for batch in tqdm(loader,disable=not args.tqdm):
             batch = batch.to(device=device)

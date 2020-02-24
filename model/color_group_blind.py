@@ -9,15 +9,16 @@ from ops.utils import gen_mask_windows, gen_quadra_mask_windows
 ListaParams = namedtuple('ListaParams', ['kernel_size', 'num_filters', 'stride', 'unfoldings',
                                          'freq', 'corr_update', 'lmbda_init', 'h', 'spams',
                                          'multi_lmbda','center_windows', 'std_gamma', 'std_y',
-                                         'block_size','nu_init','mask', 'multi_std'])
+                                         'block_size','nu_init','mask', 'multi_std',
+                                         'sigma_min','sigma_max','n_sigma'])
 
 NUM_CHANNEL = 3
 
 def group_prox(A, theta, mask_sim):
     '''
     :param theta: (1,p,1,1)
-    :param A: (b,p,h,w)
-    :param mask_sim:(b,1,N_patch,N_patch)
+    :param A: (b,p,N_patch)
+    :param mask_sim:(b,1,N_group,N_patch)
     :return: prox(A)
     '''
     A_shape = A.shape
@@ -27,7 +28,6 @@ def group_prox(A, theta, mask_sim):
     A = A.unsqueeze(2)
     out = F.relu(1-theta * support_sim / (norm_2_group))*A
     return out.view(A_shape)
-
 
 def norm_group(A,mask_sim, theta):
     '''
@@ -105,11 +105,12 @@ class groupLista(nn.Module):
 
         if params.multi_lmbda:
             self.lmbda = nn.ParameterList(
-                [nn.Parameter(torch.zeros(1, params.num_filters, 1, 1)) for _ in range(params.unfoldings)])
+            [nn.Parameter(torch.zeros(1, params.num_filters, 1, 1)) for _ in range(params.n_sigma*params.unfoldings)])
             [nn.init.constant_(x, params.lmbda_init) for x in self.lmbda]
         else:
-            self.lmbda = nn.Parameter(torch.zeros(1, params.num_filters, 1, 1))
-            nn.init.constant_(self.lmbda, params.lmbda_init)
+            self.lmbda = nn.ParameterList(
+            [nn.Parameter(torch.zeros(1, params.num_filters, 1, 1)) for _ in range(params.n_sigma)])
+            [nn.init.constant_(x, params.lmbda_init) for x in self.lmbda]
 
         self.threshold = group_prox
 
@@ -134,10 +135,21 @@ class groupLista(nn.Module):
 
             [module.set_mask(mask_window_blocks) for module in self.simLayer]
 
+        d = (params.sigma_max - params.sigma_min) / params.n_sigma
+        self.arr = [params.sigma_min + d * i for i in range(params.n_sigma + 1)]
 
-    def forward(self, I, I_clean=None, writer=None, epoch=None):
+    def lookup_arr(self, value):
+        lookup = [value <= x for x in self.arr]
+        for i, val in enumerate(lookup):
+            if val:
+                return max(i - 1, 0)
+        return i - 1
+
+    def forward(self, I,sigma_hat):
         params = self.params
         thresh_fn = self.threshold
+        noise_set = self.lookup_arr(sigma_hat)
+
         I_size = I.shape
         I_col = Im2Col(I,kernel_size=params.kernel_size,stride=params.stride,padding=0,tensorized=True)
         N = I_col.shape[2] * I_col.shape[3]
@@ -153,7 +165,9 @@ class groupLista(nn.Module):
 
         lin = self.apply_A(I_col)
 
-        lmbda_ = self.lmbda[0] if params.multi_lmbda else self.lmbda
+        # lmbda_ = self.lmbda[0] if params.multi_lmbda else self.lmbda
+        lmbda_ = self.lmbda[noise_set*params.unfoldings] if params.multi_lmbda else self.lmbda[noise_set]
+
         gamma_k = thresh_fn(lin, lmbda_, similarity_map)
 
         num_unfoldings = params.unfoldings
@@ -187,7 +201,8 @@ class groupLista(nn.Module):
             res = I_col - x_k
             r_k = self.apply_A(res)
 
-            lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda
+            lmbda_ = self.lmbda[noise_set*params.unfoldings + k+1] if params.multi_lmbda else self.lmbda[noise_set]
+            # lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda
             gamma_k = thresh_fn(gamma_k + r_k, lmbda_,similarity_map)
 
         output_all = self.apply_W(gamma_k)

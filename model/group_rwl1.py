@@ -13,20 +13,28 @@ ListaParams = namedtuple('ListaParams', ['kernel_size', 'num_filters', 'stride',
 
 NUM_CHANNEL = 3
 
-def group_prox(A, theta, mask_sim):
+def group_prox(B, A, lmbda, sigma):
     '''
-    :param theta: (1,p,1,1)
-    :param A: (b,p,h,w)
-    :param mask_sim:(b,1,N_patch,N_patch)
+    :param lmbda: (1,p,1,1)
+    :param B: (b,p,h,w)
+    :param sigma:(b,1,N_patch,N_patch)
     :return: prox(A)
     '''
-    A_shape = A.shape
+    sigma = sigma.squeeze(1)
+    B_shape = B.shape
     A = A.flatten(2,3)
-    support_sim = (mask_sim.abs().sum(2, keepdim=True) + 1e-12)**0.5
-    norm_2_group = ((torch.matmul(A.pow(2),mask_sim.squeeze(1)) +1e-8)**0.5).unsqueeze(2)
-    A = A.unsqueeze(2)
-    out = F.relu(1-theta * support_sim / (norm_2_group))*A
-    return out.view(A_shape)
+    B = B.flatten(2,3)
+    sigma_sum = (sigma.sum(2, keepdim=True) + 1e-12)
+    sigma_normalize = (sigma / sigma_sum)
+    norm_2_group_A = (torch.matmul(A.pow(2), sigma_normalize) + 1e-8).pow(0.5)
+    norm_2_group_B = (torch.matmul(B.pow(2), sigma_normalize) + 1e-8).pow(0.5)
+    # norm_1_group_B = torch.matmul(B.abs(), sigma_normalize)
+
+    # tmp = 1 - lmbda.squeeze(-1) * (A) / (norm_2_group_A * B.abs())
+    tmp = 1 - (lmbda.squeeze(-1) * (1) / (B.abs()))
+
+    out = F.relu(tmp) * B
+    return out.view(B_shape)
 
 
 def norm_group(A,mask_sim, theta):
@@ -40,7 +48,6 @@ def norm_group(A,mask_sim, theta):
     norm_2 = ((torch.matmul(A.pow(2), mask_sim) + 1e-10) ** 0.5) / support_sim
     norm_1_2 = (norm_2*theta).sum(1, keepdim=True)
     return  norm_1_2
-
 
 
 class groupLista(nn.Module):
@@ -154,7 +161,8 @@ class groupLista(nn.Module):
         lin = self.apply_A(I_col)
 
         lmbda_ = self.lmbda[0] if params.multi_lmbda else self.lmbda
-        gamma_k = thresh_fn(lin, lmbda_, similarity_map)
+        gamma_k = torch.zeros_like(lin).to(device=I.device)
+        gamma_k = thresh_fn(B=lin, A=gamma_k, lmbda=lmbda_, sigma=similarity_map)
 
         num_unfoldings = params.unfoldings
 
@@ -163,8 +171,6 @@ class groupLista(nn.Module):
                 if params.multi_std:
                     counter_lista += 1
 
-                # gamma_k_corr_update = (gamma_k * self.std_g) if (params.std_gamma) else gamma_k
-                # gamma_k_corr_update =  gamma_k
                 gamma_k_corr_update = (gamma_k * self.std_g[counter_lista-1]) if (params.std_gamma) else gamma_k
 
                 if params.corr_update == 2:
@@ -188,7 +194,7 @@ class groupLista(nn.Module):
             r_k = self.apply_A(res)
 
             lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda
-            gamma_k = thresh_fn(gamma_k + r_k, lmbda_,similarity_map)
+            gamma_k = thresh_fn(B=gamma_k + r_k,A=gamma_k , lmbda=lmbda_,sigma=similarity_map)
 
         output_all = self.apply_W(gamma_k)
         output_all += mean_patch
