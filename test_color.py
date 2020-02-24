@@ -1,4 +1,4 @@
-import dataloaders
+import dataloaders_v2
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -74,7 +74,7 @@ train_path = [f'{args.data_path}/CBSD400/']
 
 noise_std = args.noise_level / 255
 
-loaders = dataloaders.get_color_dataloaders(train_path, test_path, crop_size=args.patch_size,
+loaders = dataloaders_v2.get_color_dataloaders(train_path, test_path,train_path, crop_size=args.patch_size,
                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
 
 
@@ -145,7 +145,7 @@ psnr_set = 0
 num_iters = 0
 psnr_tot = 0
 
-loader = loaders['test'] if phase == 'val' else loaders[phase]
+loader = loaders[phase]
 
 for batch in tqdm(loader,disable=not args.tqdm):
     batch = batch.to(device=device)

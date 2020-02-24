@@ -1,4 +1,4 @@
-import dataloaders
+import dataloaders_v2
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -7,6 +7,7 @@ import os
 import time
 from ops.utils_blocks import block_module
 from ops.utils import  str2bool
+from ops.utils_plot import plot_tensor
 
 parser = argparse.ArgumentParser()
 #model
@@ -77,7 +78,7 @@ val_path = train_path
 
 noise_std = args.noise_level / 255
 
-loaders = dataloaders.get_dataloaders(train_path, test_path, crop_size=args.patch_size,
+loaders = dataloaders_v2.get_dataloaders(train_path, test_path,train_path, crop_size=args.patch_size,
                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
 
 if args.mode == 'sc':
@@ -89,6 +90,13 @@ if args.mode == 'sc':
                          unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta, verbose=args.verbose)
 
 
+elif args.mode == 'lab':
+    print('lab mode')
+    from model.gray_lab import ListaParams
+    from model.gray_lab import Lista
+
+    params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride, spams=args.spams_init,
+                         unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta, verbose=args.verbose)
 elif args.mode == 'group':
     print('group mode')
     from model.gray_group import ListaParams
@@ -106,7 +114,6 @@ else:
     raise NotImplementedError
 
 model = Lista(params).to(device=device)
-
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(f'Arguments: {vars(args)}')
 print('Nb tensors: ',len(list(model.named_parameters())), "; Trainable Params: ", pytorch_total_params, "; device: ", device,
@@ -137,6 +144,7 @@ if args.resume:
     else:
         print(f'\nno ckpt found @{ckpt_path}')
         exit()
+
 
 l = args.kernel_size // 2
 tic = time.time()

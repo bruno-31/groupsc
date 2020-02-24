@@ -28,7 +28,7 @@ python test_gray.py --model_name trained_model/gray/****/ckpt --noise_level ***
 python test_color.py --model_name trained_model/color/****/ckpt --noise_level ***
 
 ```
-
+ python test_mosaic.py --ssim 0 --model_name trained_model/mosaic/****/ckpt
 
 This code is built on CSCnet https://github.com/drorsimon/CSCNet (PyTorch). We thank the authors for sharing their codes. 
 
