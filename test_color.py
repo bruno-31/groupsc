@@ -1,4 +1,4 @@
-import dataloaders_v2
+import dataloaders
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -74,8 +74,8 @@ train_path = [f'{args.data_path}/CBSD400/']
 
 noise_std = args.noise_level / 255
 
-loaders = dataloaders_v2.get_color_dataloaders(train_path, test_path,train_path, crop_size=args.patch_size,
-                                      batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+loaders = dataloaders.get_dataloaders(train_path, test_path, train_path, crop_size=args.patch_size,
+                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1)
 
 
 if args.mode == 'group':

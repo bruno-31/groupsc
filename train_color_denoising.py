@@ -1,4 +1,4 @@
-import dataloaders_v2
+import dataloaders
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -23,11 +23,11 @@ parser.add_argument("--rescaling_init_val", type=float, default=1.0)
 parser.add_argument("--lmbda_prox", type=float, default=0.02, help='intial threshold value of lista')
 parser.add_argument("--spams_init", type=str2bool, default=0, help='init dict with spams dict')
 parser.add_argument("--nu_init", type=float, default=1, help='convex combination of correlation map init value')
-parser.add_argument("--corr_update", type=int, default=2, help='choose update method in [2,3] without or with patch averaging')
+parser.add_argument("--corr_update", type=int, default=3, help='choose update method in [2,3] without or with patch averaging')
 parser.add_argument("--multi_theta", type=str2bool, default=1, help='wether to use a sequence of lambda [1] or a single vector during lista [0]')
 parser.add_argument("--diag_rescale_gamma", type=str2bool, default=0,help='diag rescaling code correlation map')
 parser.add_argument("--diag_rescale_patch", type=str2bool, default=1,help='diag rescaling patch correlation map')
-parser.add_argument("--freq_corr_update", type=int, default=100, help='freq update correlation_map')
+parser.add_argument("--freq_corr_update", type=int, default=6, help='freq update correlation_map')
 parser.add_argument("--mask_windows", type=int, default=1,help='binarym, quadratic mask [1,2]')
 parser.add_argument("--center_windows", type=str2bool, default=1, help='compute correlation with neighboors only within a block')
 parser.add_argument("--multi_std", type=str2bool, default=0)
@@ -41,7 +41,7 @@ parser.add_argument("--eps", type=float, dest="eps", help="ADAM epsilon paramete
 parser.add_argument("--validation_every", type=int, default=10, help='validation frequency on training set (if using backtracking)')
 parser.add_argument("--backtrack", type=str2bool, default=1, help='use backtrack to prevent model divergence')
 parser.add_argument("--num_epochs", type=int, dest="num_epochs", help="Total number of epochs to train", default=300)
-parser.add_argument("--train_batch", type=int, default=25, help='batch size during training')
+parser.add_argument("--train_batch", type=int, default=32, help='batch size during training')
 parser.add_argument("--test_batch", type=int, default=10, help='batch size during eval')
 parser.add_argument("--aug_scale", type=int, default=0)
 
@@ -54,7 +54,7 @@ parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
 
 #inference
-parser.add_argument("--stride_test", type=int, default=50, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_test", type=int, default=14, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--stride_val", type=int, default=50, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
@@ -70,36 +70,23 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'
 capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else os.cpu_count()
 
+if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True
+
 test_path = [f'{args.data_path}/CBSD68/']
 train_path = [f'{args.data_path}/CBSD400/']
 val_path = train_path
 
 noise_std = args.noise_level / 255
 
-# loaders = dataloaders.get_color_dataloaders(train_path, test_path, crop_size=args.patch_size,
-#                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
-# loaders_validation = dataloaders.get_color_dataloaders(val_path, val_path, crop_size=args.patch_size,
-#                                       batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
-
-loaders = dataloaders_v2.get_color_dataloaders(train_path, test_path,val_path, crop_size=args.patch_size,
-                                      batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+loaders = dataloaders.get_dataloaders(train_path, test_path, val_path, crop_size=args.patch_size,
+                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1)
 
 
 if args.mode == 'group':
     print('group mode')
     from model.color_group import ListaParams
     from model.color_group import groupLista as Lista
-
-    params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
-                         unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,
-                         lmbda_init=args.lmbda_prox, h=args.rescaling_init_val,spams=args.spams_init,multi_lmbda=args.multi_theta,
-                         center_windows=args.center_windows,std_gamma=args.diag_rescale_gamma,
-                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows, multi_std=args.multi_std)
-
-elif args.mode == 'rwl1':
-    print('group mode')
-    from model.group_rwl1 import ListaParams
-    from model.group_rwl1 import groupLista as Lista
 
     params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
                          unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,

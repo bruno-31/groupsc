@@ -1,4 +1,4 @@
-import dataloaders_v2
+import dataloaders
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -22,11 +22,11 @@ parser.add_argument("--rescaling_init_val", type=float, default=1.0)
 parser.add_argument("--lmbda_prox", type=float, default=0.02, help='intial threshold value of lista')
 parser.add_argument("--spams_init", type=str2bool, default=1, help='init dict with spams dict')
 parser.add_argument("--nu_init", type=float, default=1, help='convex combination of correlation map init value')
-parser.add_argument("--corr_update", type=int, default=2, help='choose update method in [2,3] without or with patch averaging')
+parser.add_argument("--corr_update", type=int, default=3, help='choose update method in [2,3] without or with patch averaging')
 parser.add_argument("--multi_theta", type=str2bool, default=1, help='wether to use a sequence of lambda [1] or a single vector during lista [0]')
 parser.add_argument("--diag_rescale_gamma", type=str2bool, default=0,help='diag rescaling code correlation map')
 parser.add_argument("--diag_rescale_patch", type=str2bool, default=1,help='diag rescaling patch correlation map')
-parser.add_argument("--freq_corr_update", type=int, default=100, help='freq update correlation_map')
+parser.add_argument("--freq_corr_update", type=int, default=6, help='freq update correlation_map')
 parser.add_argument("--mask_windows", type=int, default=1,help='binarym, quadratic mask [1,2]')
 parser.add_argument("--center_windows", type=str2bool, default=1, help='compute correlation with neighboors only within a block')
 parser.add_argument("--multi_std", type=str2bool, default=0)
@@ -40,7 +40,7 @@ parser.add_argument("--eps", type=float, dest="eps", help="ADAM epsilon paramete
 parser.add_argument("--validation_every", type=int, default=10, help='validation frequency on training set (if using backtracking)')
 parser.add_argument("--backtrack", type=str2bool, default=1, help='use backtrack to prevent model divergence')
 parser.add_argument("--num_epochs", type=int, dest="num_epochs", help="Total number of epochs to train", default=300)
-parser.add_argument("--train_batch", type=int, default=16, help='batch size during training')
+parser.add_argument("--train_batch", type=int, default=32, help='batch size during training')
 parser.add_argument("--test_batch", type=int, default=10, help='batch size during eval')
 parser.add_argument("--aug_scale", type=int, default=0)
 
@@ -71,14 +71,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'
 capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else os.cpu_count()
 
+if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True
+
 test_path = [f'{args.data_path}/BSD68/']
 train_path = [f'{args.data_path}/BSD400/']
 val_path = train_path
 
 noise_std = args.noise_level / 255
 
-loaders = dataloaders_v2.get_dataloaders(train_path, test_path, val_path,crop_size=args.patch_size,
-                                      batch_size=args.train_batch, downscale=args.aug_scale,concat=1)
+loaders = dataloaders.get_dataloaders(train_path, test_path, val_path, crop_size=args.patch_size,
+                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1,grey=True)
 
 
 if args.mode == 'sc':
@@ -88,7 +91,6 @@ if args.mode == 'sc':
 
     params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride, spams=args.spams_init,
                          unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta, verbose=args.verbose)
-
 
 elif args.mode == 'group':
     print('group mode')

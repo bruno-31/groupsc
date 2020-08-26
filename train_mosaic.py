@@ -1,4 +1,4 @@
-import dataloaders_v2
+import dataloaders
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -12,7 +12,7 @@ from ops.utils import gen_bayer_mask
 
 parser = argparse.ArgumentParser()
 #model
-parser.add_argument("--mode", type=str, default='sc',help='[group, sc]')
+parser.add_argument("--mode", type=str, default='group',help='[group, sc]')
 parser.add_argument("--stride", type=int, dest="stride", help="stride size", default=1)
 parser.add_argument("--num_filters", type=int, dest="num_filters", help="Number of filters", default=256)
 parser.add_argument("--kernel_size", type=int, dest="kernel_size", help="The size of the kernel", default=7)
@@ -41,7 +41,7 @@ parser.add_argument("--eps", type=float, dest="eps", help="ADAM epsilon paramete
 parser.add_argument("--val_every", type=int, default=10, help='validation frequency on training set (if using backtracking)')
 parser.add_argument("--backtrack", type=str2bool, default=1, help='use backtrack to prevent model divergence')
 parser.add_argument("--num_epochs", type=int, dest="num_epochs", help="Total number of epochs to train", default=400)
-parser.add_argument("--train_batch", type=int, default=16, help='batch size during training')
+parser.add_argument("--train_batch", type=int, default=32, help='batch size during training')
 parser.add_argument("--test_batch", type=int, default=100, help='batch size during eval')
 parser.add_argument("--aug_scale", type=int, default=0)
 
@@ -54,7 +54,7 @@ parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
 
 #inference
-parser.add_argument("--stride_test", type=int, default=50, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_test", type=int, default=14, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--stride_val", type=int, default=50, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
@@ -64,7 +64,6 @@ parser.add_argument("--pad_patch", type=str2bool, default=0,help='padding strate
 parser.add_argument("--no_pad", type=str2bool, default=False, help='padding strategy for inference')
 parser.add_argument("--custom_pad", type=int, default=None,help='padding strategy for inference')
 
-parser.add_argument("--div2k", type=str2bool, default=False)
 parser.add_argument("--n_worker", type=int, default=8)
 parser.add_argument("--grad", type=str2bool, default=0)
 parser.add_argument("--opt", type=str, default='adam', help='[sgd,adam,adagrad]')
@@ -86,25 +85,15 @@ capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() el
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
 
-# test_path = [f'{args.data_path}/CBSD68/']
-test_path = [f'../denoising-net/datasets/kodak24']
-# test_path = [f'../denoising-net/datasets/Urban100']
-
+test_path = [f'{args.data_path}/CBSD68/']
 train_path = [f'{args.data_path}/CBSD400/']
 val_path = train_path
 
-if args.div2k:
-    print('training on div2k ...')
-    # train_path = [f'./datasets/DIV2K_train_x2/']
-    train_path = ['../datasets/DIV2K_train_HR/','../datasets/DIV2K_valid_HR']
-    # val_path = ['../datasets/DIV2K_valid_HR']
-    val_path = [f'{args.data_path}/CBSD68/']
-
 noise_std = args.noise_level / 255
 
-loaders = dataloaders_v2.get_color_dataloaders(train_path, test_path, val_path, crop_size=args.patch_size,
-                        batch_size=args.train_batch, downscale=args.aug_scale,concat=1, n_worker=args.n_worker,
-                                               scale_max=args.scale_max, scale_min=args.scale_min)
+loaders = dataloaders.get_dataloaders(train_path, test_path, val_path, crop_size=args.patch_size,
+                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1, n_worker=args.n_worker,
+                                      scale_max=args.scale_max, scale_min=args.scale_min)
 
 if args.mode == 'group':
     print('group mode')
@@ -125,13 +114,6 @@ elif args.mode == 'sc':
     params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
                          unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta)
 
-elif args.mode == 'elastic':
-    print('sc mode')
-    from model.mosaic_elastic import ListaParams
-    from model.mosaic_elastic import Lista
-
-    params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride,
-                         unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta)
 else:
     raise NotImplementedError
 
@@ -232,7 +214,6 @@ while epoch < args.num_epochs:
                 continue # test every k epoch
             print(f'starting eval on test set with stride {args.stride_test}...')
             model.eval()  # Set model to evaluate mode
-
 
         # Iterate over data.
         num_iters = 0
