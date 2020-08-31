@@ -64,6 +64,12 @@ parser.add_argument("--pad_patch", type=str2bool, default=0,help='padding strate
 parser.add_argument("--no_pad", type=str2bool, default=False, help='padding strategy for inference')
 parser.add_argument("--custom_pad", type=int, default=None,help='padding strategy for inference')
 
+#variance reduction
+#var reg
+parser.add_argument("--nu_var", type=float, default=0.01)
+parser.add_argument("--freq_var", type=int, default=3)
+parser.add_argument("--var_reg", type=str2bool, default=False)
+
 parser.add_argument("--verbose", type=str2bool, default=0)
 
 args = parser.parse_args()
@@ -104,7 +110,7 @@ elif args.mode == 'group':
                          multi_lmbda=args.multi_theta,
                          center_windows=args.center_windows, std_gamma=args.diag_rescale_gamma,
                          std_y=args.diag_rescale_patch, block_size=args.patch_size, nu_init=args.nu_init,
-                         mask=args.mask_windows, multi_std=args.multi_std)
+                         mask=args.mask_windows, multi_std=args.multi_std, freq_var=args.freq_var, var_reg=args.var_reg,nu_var=args.nu_var)
 
 else:
     raise NotImplementedError
@@ -242,14 +248,13 @@ while epoch < args.num_epochs:
                     else:
                         output = model(noisy_batch)
 
-                    loss_psnr = -10 * torch.log10((output.clamp(0.,1.) - batch).pow(2).flatten(2, 3).mean(2)).mean()
+                    loss_psnr = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).mean([1, 2, 3])).mean()
 
                 if phase == 'train':
 
                     output = model(noisy_batch)
                     loss = (mask * (output - batch)).pow(2).sum() / batch.shape[0]
-
-                    loss_psnr = -10 * torch.log10((output - batch).pow(2).flatten(2, 3).mean(2)).mean()
+                    loss_psnr =  -10 * torch.log10((output - batch).pow(2).mean([1, 2, 3])).mean()
 
                     loss.backward()
                     optimizer.step()

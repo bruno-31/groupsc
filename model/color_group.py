@@ -9,7 +9,7 @@ from ops.utils import gen_mask_windows, gen_quadra_mask_windows
 ListaParams = namedtuple('ListaParams', ['kernel_size', 'num_filters', 'stride', 'unfoldings',
                                          'freq', 'corr_update', 'lmbda_init', 'h', 'spams',
                                          'multi_lmbda','center_windows', 'std_gamma', 'std_y',
-                                         'block_size','nu_init','mask', 'multi_std'])
+                                         'block_size','nu_init','mask', 'multi_std','freq_var','var_reg','nu_var'])
 
 NUM_CHANNEL = 3
 
@@ -128,6 +128,10 @@ class groupLista(nn.Module):
 
             [module.set_mask(mask_window_blocks) for module in self.simLayer]
 
+        if params.var_reg:
+            print('var reg')
+            self.nu_var = nn.Parameter(torch.zeros(1))
+            nn.init.constant_(self.nu_var, params.nu_var)
 
     def forward(self, I, I_clean=None, writer=None, epoch=None):
         params = self.params
@@ -183,6 +187,14 @@ class groupLista(nn.Module):
 
             lmbda_ = self.lmbda[k+1] if params.multi_lmbda else self.lmbda
             gamma_k = thresh_fn(gamma_k + r_k, lmbda_,similarity_map)
+
+            if (k%params.freq_var == 0) and (params.var_reg) :
+                output_all = self.apply_W(gamma_k)
+                output = Col2Im(output_all, I_size[2:], kernel_size=params.kernel_size, stride=params.stride, padding=0,
+                                avg=True, input_tensorized=True)
+                I_col_ = Im2Col(output, kernel_size=params.kernel_size, stride=params.stride, padding=0, tensorized=True)
+                nu = self.nu_var
+                I_col = (1 - nu) * I_col  + nu * I_col_
 
         output_all = self.apply_W(gamma_k)
         output_all += mean_patch

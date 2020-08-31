@@ -84,8 +84,13 @@ def get_dataloaders(train_path_list, test_path_list, val_path_list, crop_size=12
 
     image_datasets = {'train': train,
                       'test': Dataset(test_path_list, data_transforms['test'], verbose=verbose, grey=grey),
-                      'val':Dataset(val_path_list, data_transforms['test'], verbose=verbose, grey=grey)}
+                      'val': Dataset(val_path_list, data_transforms['test'], verbose=verbose, grey=grey)}
 
-    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x],
+    if len(val_path_list) == 0 or len(train_path_list) == 0:
+        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x],
+                                                      num_workers=n_worker, drop_last=drop_last, shuffle=(x == 'train'))
+                       for x in ['test']}
+    else:
+        dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_sizes[x],
                                                   num_workers=n_worker,drop_last=drop_last, shuffle=(x == 'train')) for x in ['train', 'test', 'val']}
     return dataloaders

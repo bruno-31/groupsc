@@ -55,7 +55,7 @@ parser.add_argument("--test_path", type=str, help="Path to the dir containing th
 parser.add_argument("--train_path", type=str, help="Path to the dir containing the training datasets.", default="./datasets/BSD400/")
 
 #inference
-parser.add_argument("--stride_test", type=int, default=14, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_test", type=int, default=10, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--stride_val", type=int, default=50, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
@@ -75,7 +75,10 @@ parser.add_argument("--scale_max", type=float, default=0.1)
 parser.add_argument("--bckThrs", type=float, default=0.3)
 parser.add_argument("--tb", type=str2bool, default=False)
 
-
+#var reg
+parser.add_argument("--nu_var", type=float, default=0.01)
+parser.add_argument("--freq_var", type=int, default=3)
+parser.add_argument("--var_reg", type=str2bool, default=False)
 
 args = parser.parse_args()
 
@@ -105,7 +108,8 @@ if args.mode == 'group':
                          unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,
                          lmbda_init=args.lmbda_prox, h=args.rescaling_init_val,spams=args.spams_init,multi_lmbda=args.multi_theta,
                          center_windows=args.center_windows,std_gamma=args.diag_rescale_gamma,
-                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows, multi_std=args.multi_std)
+                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows, multi_std=args.multi_std,
+                         freq_var=args.freq_var, var_reg=args.var_reg, nu_var=args.nu_var)
 
 elif args.mode == 'sc':
     print('sc mode')
@@ -269,13 +273,12 @@ while epoch < args.num_epochs:
                     else:
                         output = model(noisy_batch, mask_bayer)
 
-                    loss_psnr = -10 * torch.log10((output.clamp(0.,1.) - batch).pow(2).flatten(2, 3).mean(2)).mean()
-
+                    loss_psnr = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).mean([1, 2, 3])).mean()
                 if phase == 'train':
 
                     output = model(noisy_batch, mask=mask_bayer)
                     loss = (mask * (output - batch)).pow(2).sum() / batch.shape[0]
-                    loss_psnr = -10 * torch.log10((output - batch).pow(2).flatten(2, 3).mean(2)+1e-8).mean()
+                    loss_psnr = -10 * torch.log10((output - batch).pow(2).mean([1, 2, 3])+1e-8).mean()
 
                     if torch.isnan(loss_psnr) or torch.isinf(loss_psnr) or torch.isnan(loss) or torch.isinf(loss):
                         tqdm.write((f'inf loss {loss_psnr.item()}, {loss.item()}'))

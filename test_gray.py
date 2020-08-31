@@ -7,7 +7,6 @@ import os
 import time
 from ops.utils_blocks import block_module
 from ops.utils import  str2bool
-from ops.utils_plot import plot_tensor
 
 parser = argparse.ArgumentParser()
 #model
@@ -24,7 +23,7 @@ parser.add_argument("--spams_init", type=str2bool, default=1, help='init dict wi
 parser.add_argument("--nu_init", type=float, default=1, help='convex combination of correlation map init value')
 parser.add_argument("--corr_update", type=int, default=3, help='choose update method in [2,3] without or with patch averaging')
 parser.add_argument("--multi_theta", type=str2bool, default=1, help='wether to use a sequence of lambda [1] or a single vector during lista [0]')
-parser.add_argument("--diag_rescale_gamma", type=str2bool, default=1,help='diag rescaling code correlation map')
+parser.add_argument("--diag_rescale_gamma", type=str2bool, default=0,help='diag rescaling code correlation map')
 parser.add_argument("--diag_rescale_patch", type=str2bool, default=1,help='diag rescaling patch correlation map')
 parser.add_argument("--freq_corr_update", type=int, default=6, help='freq update correlation_map')
 parser.add_argument("--mask_windows", type=int, default=1,help='binarym, quadratic mask [1,2]')
@@ -57,13 +56,18 @@ parser.add_argument("--stride_test", type=int, default=12, help='stride of overl
 parser.add_argument("--stride_val", type=int, default=48, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
-parser.add_argument("--pad_image", type=str2bool, default=0,help='padding strategy for inference')
-parser.add_argument("--pad_block", type=str2bool, default=1,help='padding strategy for inference')
-parser.add_argument("--pad_patch", type=str2bool, default=0,help='padding strategy for inference')
-parser.add_argument("--no_pad", type=str2bool, default=False, help='padding strategy for inference')
-parser.add_argument("--custom_pad", type=int, default=None,help='padding strategy for inference')
-
+parser.add_argument("--pad_image", type=str2bool, default=0)
+parser.add_argument("--pad_block", type=str2bool, default=1)
+parser.add_argument("--pad_patch", type=str2bool, default=0)
+parser.add_argument("--no_pad", type=str2bool, default=False)
+parser.add_argument("--custom_pad", type=int, default=None)
+parser.add_argument("--testpath", type=str, default='./datasets/BSD68')
 parser.add_argument("--verbose", type=str2bool, default=0)
+
+#var reg
+parser.add_argument("--nu_var", type=float, default=0.01)
+parser.add_argument("--freq_var", type=int, default=3)
+parser.add_argument("--var_reg", type=str2bool, default=False)
 
 args = parser.parse_args()
 
@@ -72,14 +76,14 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'
 capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else os.cpu_count()
 
-test_path = [f'{args.data_path}/BSD68/']
-train_path = [f'{args.data_path}/BSD400/']
-val_path = train_path
+test_path = [args.testpath]
+print(f'test data : {test_path}')
+train_path = val_path = []
 
 noise_std = args.noise_level / 255
 
 loaders = dataloaders.get_dataloaders(train_path, test_path, train_path, crop_size=args.patch_size,
-                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1)
+                                      batch_size=args.train_batch, downscale=args.aug_scale, concat=1,grey=True)
 
 if args.mode == 'sc':
     print('sc mode')
@@ -89,14 +93,6 @@ if args.mode == 'sc':
     params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride, spams=args.spams_init,
                          unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta, verbose=args.verbose)
 
-
-elif args.mode == 'lab':
-    print('lab mode')
-    from model.gray_lab import ListaParams
-    from model.gray_lab import Lista
-
-    params = ListaParams(kernel_size=args.kernel_size, num_filters=args.num_filters, stride=args.stride, spams=args.spams_init,
-                         unfoldings=args.unfoldings,threshold=args.lmbda_prox, multi_lmbda=args.multi_theta, verbose=args.verbose)
 elif args.mode == 'group':
     print('group mode')
     from model.gray_group import ListaParams
@@ -108,7 +104,7 @@ elif args.mode == 'group':
                          multi_lmbda=args.multi_theta,
                          center_windows=args.center_windows, std_gamma=args.diag_rescale_gamma,
                          std_y=args.diag_rescale_patch, block_size=args.patch_size, nu_init=args.nu_init,
-                         mask=args.mask_windows, multi_std=args.multi_std)
+                         mask=args.mask_windows, multi_std=args.multi_std, freq_var=args.freq_var, var_reg=args.var_reg,nu_var=args.nu_var)
 
 else:
     raise NotImplementedError
@@ -191,7 +187,7 @@ for batch in tqdm(loader,disable=not args.tqdm):
         else:
             output = model(noisy_batch)
 
-        psnr_batch = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).flatten(2, 3).mean(2)).mean()
+        psnr_batch = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).mean([1, 2, 3])).mean()
 
     psnr_tot += psnr_batch
     num_iters += 1

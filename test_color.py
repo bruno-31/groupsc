@@ -7,7 +7,7 @@ import os
 import torch.nn.functional as F
 import time
 from ops.utils_blocks import block_module
-from ops.utils import show_mem, generate_key, save_checkpoint, str2bool, step_lr, get_lr
+from ops.utils import str2bool
 
 parser = argparse.ArgumentParser()
 #model
@@ -53,8 +53,7 @@ parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
 
 #inference
-parser.add_argument("--stride_test", type=int, default=12, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
-parser.add_argument("--stride_val", type=int, default=48, help='stride of overlapping image blocks for validation [4,8,16,24,48] kernel_//stride')
+parser.add_argument("--stride_test", type=int, default=10, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
 parser.add_argument("--test_every", type=int, default=100, help='report performance on test set every X epochs')
 parser.add_argument("--block_inference", type=str2bool, default=True,help='if true process blocks of large image in paralel')
 parser.add_argument("--pad_image", type=str2bool, default=0,help='padding strategy for inference')
@@ -62,6 +61,12 @@ parser.add_argument("--pad_block", type=str2bool, default=1,help='padding strate
 parser.add_argument("--pad_patch", type=str2bool, default=0,help='padding strategy for inference')
 parser.add_argument("--no_pad", type=str2bool, default=False, help='padding strategy for inference')
 parser.add_argument("--custom_pad", type=int, default=None,help='padding strategy for inference')
+parser.add_argument("--testpath", type=str, default='./datasets/CBSD68')
+
+#var reg
+parser.add_argument("--nu_var", type=float, default=0.01)
+parser.add_argument("--freq_var", type=int, default=3)
+parser.add_argument("--var_reg", type=str2bool, default=False)
 
 args = parser.parse_args()
 
@@ -69,8 +74,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'
 capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else os.cpu_count()
 
-test_path = [f'{args.data_path}/CBSD68/']
-train_path = [f'{args.data_path}/CBSD400/']
+test_path = [args.testpath]
+print(f'test data : {test_path}')
+train_path = val_path = []
 
 noise_std = args.noise_level / 255
 
@@ -87,7 +93,7 @@ if args.mode == 'group':
                          unfoldings=args.unfoldings, freq=args.freq_corr_update,corr_update=args.corr_update,
                          lmbda_init=args.lmbda_prox, h=args.rescaling_init_val,spams=args.spams_init,multi_lmbda=args.multi_theta,
                          center_windows=args.center_windows,std_gamma=args.diag_rescale_gamma,multi_std=args.multi_std,
-                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows)
+                         std_y=args.diag_rescale_patch,block_size=args.patch_size,nu_init=args.nu_init,mask=args.mask_windows, freq_var=args.freq_var, var_reg=args.var_reg,nu_var=args.nu_var)
 
 elif args.mode == 'sc':
     print('sc mode')
@@ -187,7 +193,7 @@ for batch in tqdm(loader,disable=not args.tqdm):
             else:
                 output = model(noisy_batch)
 
-            psnr_batch = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).flatten(2, 3).mean(2)).mean()
+            psnr_batch = -10 * torch.log10((output.clamp(0., 1.) - batch).pow(2).mean([1, 2, 3])).mean()
 
     psnr_tot += psnr_batch
     num_iters += 1
