@@ -48,10 +48,11 @@ parser.add_argument("--aug_scale", type=int, default=0)
 #save
 parser.add_argument("--out_dir", type=str, dest="out_dir", help="Results' dir path", default='./trained_model')
 parser.add_argument("--model_name", type=str, dest="model_name", help="The name of the model to be saved.", default=None)
-parser.add_argument("--data_path", type=str, dest="data_path", help="Path to the dir containing the training and testing datasets.", default="./datasets/")
 parser.add_argument("--resume", type=str2bool, dest="resume", help='Resume training of the model',default=True)
 parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
+parser.add_argument("--test_path", type=str, help="Path to the dir containing the testing datasets.", default="./datasets/BSD68/")
+parser.add_argument("--train_path", type=str, help="Path to the dir containing the training datasets.", default="./datasets/BSD400/")
 
 #inference
 parser.add_argument("--stride_test", type=int, default=14, help='stride of overlapping image blocks [4,8,16,24,48] kernel_//stride')
@@ -85,8 +86,8 @@ capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() el
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
 
-test_path = [f'{args.data_path}/CBSD68/']
-train_path = [f'{args.data_path}/CBSD400/']
+test_path = [f'{args.test_path}']
+train_path = [f'{args.train_path}']
 val_path = train_path
 
 noise_std = args.noise_level / 255

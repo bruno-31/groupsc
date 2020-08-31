@@ -85,15 +85,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'
 capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else os.cpu_count()
 
-# test_path = [f'../denoising-net/datasets/Urban100']
-# test_path = [f'../denoising-net/datasets/McM']
-# test_path = [f'{args.data_path}/CBSD68/']
-# test_path = [f'{args.data_path}/kodak24/']
-# test_path = [f'../denoising-net/datasets/Urban26']
-
 test_path = [args.testpath]
 print(test_path)
-# train_path = [f'{args.data_path}/CBSD400/']
 train_path = test_path
 val_path = train_path
 

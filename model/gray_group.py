@@ -81,17 +81,14 @@ class groupLista(nn.Module):
         # =====
 
         if params.std_gamma:
-            print('code diag reweighting')
             n_diag_g = num_lista-1 if params.multi_std else 1
             self.std_g = nn.ParameterList([nn.Parameter(torch.zeros(1, params.num_filters, 1, 1)) for _ in range(n_diag_g)])
             [nn.init.constant_(elem, 1.) for elem in self.std_g]
 
         if params.std_y:
-            print('patch diag reweighting')
             self.std = nn.ParameterList([nn.Parameter(torch.zeros(1, params.kernel_size ** 2 *NUM_CHANNEL, 1, 1)) for _ in range(num_lista)])
             [nn.init.constant_(elem, 1 / params.h)  for elem in self.std]
         else:
-            print('patch scalar reweighting')
             self.std = nn.ParameterList([nn.Parameter(torch.zeros(1, 1, 1, 1)) for _ in range(num_lista)])
             [nn.init.constant_(elem, 1 / params.h)  for elem in self.std]
 
@@ -113,17 +110,14 @@ class groupLista(nn.Module):
         self.threshold = group_prox
 
         if params.center_windows:
-            print('center windows distance')
             n_mask = params.block_size - (params.kernel_size//2)*2
 
             if params.mask == 1:
-                print('binary_mask')
                 mask_window_blocks = gen_mask_windows(n_mask,n_mask).contiguous().view(
                     1,n_mask**2,n_mask**2)
                 mask_window_blocks[mask_window_blocks==0]= 1e10
                 mask_window_blocks[mask_window_blocks==1]=0
             elif params.mask ==2:
-                print('quadratic mask')
                 cut_dist = n_mask-5
                 mask_window_blocks = gen_quadra_mask_windows(n_mask,n_mask,cut_dist,cut_dist).contiguous().view(
                     1,n_mask**2,n_mask**2)

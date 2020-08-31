@@ -48,8 +48,6 @@ class Lista(nn.Module):
 
         self.params = params
 
-        print("centered patches")
-
         if params.multi_lmbda:
             self.lmbda = nn.ParameterList(
             [nn.Parameter(torch.zeros(1, params.num_filters, 1, 1)) for _ in range(params.unfoldings)])

@@ -44,10 +44,11 @@ parser.add_argument("--train_batch", type=int, default=32, help='batch size duri
 parser.add_argument("--test_batch", type=int, default=10, help='batch size during eval')
 parser.add_argument("--aug_scale", type=int, default=0)
 
-#save
+#data
 parser.add_argument("--out_dir", type=str, dest="out_dir", help="Results' dir path", default='./trained_model')
 parser.add_argument("--model_name", type=str, dest="model_name", help="The name of the model to be saved.", default=None)
-parser.add_argument("--data_path", type=str, dest="data_path", help="Path to the dir containing the training and testing datasets.", default="./datasets/")
+parser.add_argument("--test_path", type=str, help="Path to the dir containing the testing datasets.", default="./datasets/BSD68/")
+parser.add_argument("--train_path", type=str, help="Path to the dir containing the training datasets.", default="./datasets/BSD400/")
 parser.add_argument("--resume", type=str2bool, dest="resume", help='Resume training of the model',default=True)
 parser.add_argument("--dummy", type=str2bool, dest="dummy", default=False)
 parser.add_argument("--tqdm", type=str2bool, default=False)
@@ -74,8 +75,8 @@ capability = torch.cuda.get_device_capability(0) if torch.cuda.is_available() el
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
 
-test_path = [f'{args.data_path}/BSD68/']
-train_path = [f'{args.data_path}/BSD400/']
+test_path = [f'{args.test_path}']
+train_path = [f'{args.train_path}']
 val_path = train_path
 
 noise_std = args.noise_level / 255
@@ -314,3 +315,14 @@ while epoch < args.num_epochs:
                      'optimizer': optimizer.state_dict(),
                      'psnr_validation':psnr_validation}, ckpt_path)
 
+if args.tb and args.model_name is not None:
+    import csv
+    import re
+    epoch-= 1
+    score = [f'{psnr[phase][-1]:0.4f}' for phase in ['train','val','test']]
+    row = re.findall('.+?%.+?_', args.model_name) + score
+    # row = args.model_name.split('_') + score
+    with open(f'{args.out_dir}/report.csv', 'a') as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerow(row)
+    csvFile.close()

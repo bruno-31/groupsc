@@ -19,7 +19,17 @@ Please cite our work if you find it useful for your research and work:
 
 The repo supports python 3.6 + pytorch 1.3.0
 
+## Datasets
+All the models are trained on BSD400 and tested on BSD68. Simply change the following lines at the begining of the 
+training script with paths to custom datasets if needed.
+
+```
+test_path = [f'{args.data_path}/BSD68/']
+train_path = [f'{args.data_path}/BSD400/']
+```
+
 ## Run the Code
+
 
 To train a new model for color denoising:
 ```
@@ -30,7 +40,7 @@ To train a new model for gray denoising:
 python train_gray_denoising.py
 ```
 
-To train a new model for gray denoising:
+To train a new model for demosaicking:
 ```
 python train_mosaic.py
 ```
