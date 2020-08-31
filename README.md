@@ -1,10 +1,10 @@
 # GroupSC
 
-This is the code for our ECCV 2020 paper : 
-[Revisiting Non Local Sparse Models for Image Restoration](https://arxiv.org/abs/1912.02456).
-In this work, we propose a differentiable unrolled algorithm to solve the group lasso optimization problem 
-in order to enforce joint sparsity among sets of similar patches.
-The code reproduces the results presented in the paper.
+This is the code for our **ECCV 2020** paper : 
+[Fully Trainable and Interpretable Non-Local
+Sparse Models for Image Restoration](https://arxiv.org/abs/1912.02456).
+In this work, we propose an unrolled **relaxation of the group lasso** to enforce **joint sparsity** among sets of similar patches.
+The code reproduces the results presented in the paper for several image restoration problems.
 
 
 #### New :  Variance Reduction Penalty
@@ -44,11 +44,11 @@ the arguments ``--test_path`` and ``--train_path`` for training/testing on other
 ###Demosaicking
 (Training on CBSD400)
 
-| Model                | Params | Kodak24 | CBSD68 | Urban100 |
-|----------------------|:--------:|:-------:|:------:|:--------:|
-| IRCNN                |   -    |  40.54  |  39.90 |   36.64  |
-| RNAN                 | 8.96M  |  42.86  |  42.61 |    N/A   |
-|**GroupSc**       | 119k   |  42.72  |  42.96 |          |
+| Model                | Params | Kodak24 | CBSD68 | 
+|----------------------|:--------:|:-------:|:------:|
+| IRCNN                |   -    |  40.54  |  39.90 |  
+| RNAN                 | 8.96M  |  42.86  |  42.61 |  
+|**GroupSc**       | 119k   |  42.72  |  42.96 |   
 
 ### Color denoising
 (Training on CBSD400)
