@@ -27,7 +27,7 @@ Please cite our work if you find it useful for your research and work:
 @article{lecouat2020designing,
   title={Designing and Learning Trainable Priors with Non-Cooperative Games},
   author={Lecouat, Bruno and Ponce, Jean and Mairal, Julien},
-  journal={arXiv preprint arXiv:2006.14859},
+  journal={Adv. in Neural Information Processing Systems (NeurIPS)},
   year={2020}
 }
 ```
@@ -41,7 +41,7 @@ the arguments ``--test_path`` and ``--train_path`` for training/testing on other
 
 ## Results
 
-###Demosaicking
+### Demosaicking
 (Training on CBSD400)
 
 | Model                | Params | Kodak24 | CBSD68 | 
